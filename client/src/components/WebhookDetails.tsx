@@ -18,13 +18,40 @@ export const WebhookDetails: React.FC = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const baseUrl = process.env.NODE_ENV === 'production' 
-    ? process.env.REACT_APP_SERVER_URL 
-    : process.env.REACT_APP_SERVER_URL_LOCAL || 'http://localhost:5000';
+    ? process.env.REACT_APP_SERVER_URL || 'http://193.219.97.148:5100'
+    : process.env.REACT_APP_SERVER_URL_LOCAL || 'http://localhost:5100';
 
-  const handleCopyUrl = () => {
+  const handleCopyUrl = async () => {
     if (selectedWebhook) {
       const fullUrl = `${baseUrl}${selectedWebhook.url}`;
-      navigator.clipboard.writeText(fullUrl);
+      try {
+        // Try using modern Clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(fullUrl);
+          console.log('URL copied to clipboard successfully');
+        } else {
+          // Fallback for older browsers or non-secure contexts
+          const textArea = document.createElement('textarea');
+          textArea.value = fullUrl;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          
+          try {
+            document.execCommand('copy');
+            console.log('URL copied to clipboard using fallback');
+          } catch (err) {
+            console.error('Failed to copy using fallback:', err);
+          }
+          
+          textArea.remove();
+        }
+      } catch (err) {
+        console.error('Failed to copy URL:', err);
+      }
     }
   };
 
