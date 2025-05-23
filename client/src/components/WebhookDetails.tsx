@@ -17,7 +17,9 @@ export const WebhookDetails: React.FC = () => {
   const [tabValue, setTabValue] = React.useState(0);
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const baseUrl = 'http://localhost:5000';
+  const baseUrl = process.env.NODE_ENV === 'production' 
+    ? process.env.REACT_APP_SERVER_URL 
+    : process.env.REACT_APP_SERVER_URL_LOCAL || 'http://localhost:5000';
 
   const handleCopyUrl = () => {
     if (selectedWebhook) {
