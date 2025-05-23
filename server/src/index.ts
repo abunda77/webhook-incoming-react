@@ -48,74 +48,24 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: function(origin, callback) {
-      console.log('Socket.IO Incoming Origin:', origin);
-      
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      
-      // Check if the origin matches any of our allowed origins
-      const isAllowed = allowedOrigins.some(allowedOrigin => 
-        origin.toLowerCase().startsWith(allowedOrigin.toLowerCase())
-      );
-
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        console.log('Socket.IO Rejected Origin:', origin);
-        callback(new Error('Socket.IO: Not allowed by CORS'));
-      }
-    },
-    methods: ['GET', 'POST'],
-    credentials: true,
+    origin: '*', // Allow all origins
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: false, // Must be false when using '*'
     allowedHeaders: ['Content-Type', 'Authorization']
   },
-  allowEIO3: true, // Allow Engine.IO version 3 connections
-  transports: ['websocket', 'polling'], // Enable both WebSocket and polling transport
+  allowEIO3: true,
+  transports: ['websocket', 'polling'],
   pingTimeout: 60000,
-  pingInterval: 25000,
-  path: '/socket.io/', // Explicitly set Socket.IO path
-  cookie: {
-    name: 'io',
-    httpOnly: true,
-    sameSite: 'lax'
-  }
+  pingInterval: 25000
 });
 
 // Configure CORS
 app.use(cors({
-  origin: function(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    console.log('Incoming Origin:', origin);
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-    
-    // Check if the origin matches any of our allowed origins
-    const isAllowed = allowedOrigins.some(allowedOrigin => 
-      origin.toLowerCase().startsWith(allowedOrigin.toLowerCase())
-    );
-
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('Rejected Origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
+  origin: '*', // Allow all origins
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Length', 'Content-Type']
+  allowedHeaders: ['Content-Type', 'Authorization', '*'],
+  credentials: false // Must be false when using '*'
 }));
-
-// Enable pre-flight requests for all routes
-app.options('*', cors());
 
 app.use(express.json());
 
