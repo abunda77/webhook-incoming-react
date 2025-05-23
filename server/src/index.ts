@@ -22,12 +22,9 @@ interface WebhookData {
 }
 
 // Environment variables
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 const SERVER_PORT = parseInt(process.env.PORT || '5000', 10);
 
 const allowedOrigins = [
-  'http://localhost:3100',
-  'http://localhost:5100',
   'http://193.219.97.148:3100',
   'http://193.219.97.148:5100',
   'https://webhook.produkmastah.com',
