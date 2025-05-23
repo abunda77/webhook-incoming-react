@@ -23,8 +23,11 @@ interface WebhookContextType {
 
 const WebhookContext = createContext<WebhookContextType | undefined>(undefined);
 
-// Mengubah default URL ke port 5100 dan menambahkan production URL
-const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 'http://193.219.97.148:5100';
+// Mengubah default URL dan menambahkan port yang benar
+const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:5100'
+    : 'http://193.219.97.148:5100');
 
 export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -33,17 +36,18 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Initialize socket connection
   useEffect(() => {
+    console.log('Connecting to backend URL:', BACKEND_URL);
+    
     const newSocket = io(BACKEND_URL, {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       withCredentials: false,
-      transports: ['polling'], // Start with polling only
-      timeout: 20000,
+      transports: ['polling', 'websocket'],
+      timeout: 60000,
       forceNew: true,
-      path: '/socket.io',
-      autoConnect: true
+      path: '/socket.io'
     });
 
     newSocket.on('connect', () => {
@@ -52,6 +56,11 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     newSocket.on('connect_error', (error) => {
       console.error('Socket connection error:', error.message);
+      console.log('Current transport:', newSocket.io.engine.transport.name);
+    });
+
+    newSocket.on('error', (error) => {
+      console.error('Socket error:', error);
     });
 
     newSocket.on('disconnect', (reason) => {
@@ -61,14 +70,17 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSocket(newSocket);
 
     return () => {
-      newSocket.disconnect();
+      if (newSocket) {
+        console.log('Cleaning up socket connection');
+        newSocket.disconnect();
+      }
     };
   }, []);
 
   // Fetch initial webhooks
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 30000); // Increase timeout to 30 seconds
 
     const fetchWebhooks = async () => {
       try {
@@ -79,7 +91,9 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
-          signal: controller.signal
+          signal: controller.signal,
+          mode: 'cors',
+          cache: 'no-cache',
         });
 
         if (!response.ok) {
@@ -90,7 +104,11 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.log('Webhooks fetched successfully:', data);
       } catch (error) {
         if (error instanceof Error) {
-          console.error('Error fetching webhooks:', error.message);
+          if (error.name === 'AbortError') {
+            console.log('Fetch aborted due to timeout');
+          } else {
+            console.error('Error fetching webhooks:', error.message);
+          }
         }
       }
     };
@@ -128,7 +146,7 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const createWebhook = async () => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 30000); // Increase timeout to 30 seconds
 
     try {
       console.log('Creating new webhook at:', BACKEND_URL);
@@ -138,7 +156,9 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        signal: controller.signal
+        signal: controller.signal,
+        mode: 'cors',
+        cache: 'no-cache',
       });
       
       if (!response.ok) {
@@ -152,7 +172,11 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return newWebhook;
     } catch (error) {
       if (error instanceof Error) {
-        console.error('Error creating webhook:', error.message);
+        if (error.name === 'AbortError') {
+          console.log('Create webhook aborted due to timeout');
+        } else {
+          console.error('Error creating webhook:', error.message);
+        }
       }
       throw error;
     } finally {
