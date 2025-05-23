@@ -24,10 +24,25 @@ interface WebhookContextType {
 const WebhookContext = createContext<WebhookContextType | undefined>(undefined);
 
 // Mengubah default URL dan menambahkan port yang benar
-const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 
-  (window.location.hostname === 'localhost' 
-    ? 'https://webhook-server.produkmastah.com' // Use HTTPS for localhost:5100'
-    : 'http://193.219.97.148:5100');
+const BACKEND_URL = (() => {
+  // Check if we're in production
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.REACT_APP_SERVER_URL || 'https://webhook-server.produkmastah.com';
+  }
+  
+  // For development, try to use the same hostname as the client
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5100';
+  } else if (hostname === '193.219.97.148') {
+    return 'http://193.219.97.148:5100';
+  } else if (hostname.includes('produkmastah.com')) {
+    return 'https://webhook-server.produkmastah.com';
+  }
+  
+  // Default fallback
+  return 'https://webhook-server.produkmastah.com';
+})();
 
 export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -47,7 +62,10 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
       transports: ['polling', 'websocket'],
       timeout: 60000,
       forceNew: true,
-      path: '/socket.io'
+      path: '/socket.io',
+      // Add additional Socket.IO options for secure connections
+      secure: BACKEND_URL.startsWith('https'),
+      rejectUnauthorized: false // Helps with self-signed certificates if you're using any
     });
 
     newSocket.on('connect', () => {
@@ -80,7 +98,7 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Fetch initial webhooks
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // Increase timeout to 30 seconds
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     const fetchWebhooks = async () => {
       try {
@@ -94,6 +112,8 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
           signal: controller.signal,
           mode: 'cors',
           cache: 'no-cache',
+          credentials: 'same-origin',
+          referrerPolicy: 'no-referrer-when-downgrade'
         });
 
         if (!response.ok) {
@@ -146,7 +166,7 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const createWebhook = async () => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // Increase timeout to 30 seconds
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
       console.log('Creating new webhook at:', BACKEND_URL);
@@ -159,6 +179,8 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
         signal: controller.signal,
         mode: 'cors',
         cache: 'no-cache',
+        credentials: 'same-origin',
+        referrerPolicy: 'no-referrer-when-downgrade'
       });
       
       if (!response.ok) {
