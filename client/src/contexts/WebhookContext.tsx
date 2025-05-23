@@ -37,7 +37,9 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      withCredentials: true,
+      withCredentials: false, // Change to false since we're using '*' for CORS
+      transports: ['websocket', 'polling'], // Explicitly set transports
+      timeout: 60000,
     });
 
     newSocket.on('connect', () => {
@@ -46,6 +48,11 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     newSocket.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
+      // Attempt to reconnect with polling if websocket fails
+      if ((newSocket.io.opts.transports as string[])?.includes('websocket')) {
+        console.log('Falling back to polling transport');
+        newSocket.io.opts.transports = ['polling'];
+      }
     });
 
     newSocket.on('disconnect', (reason) => {
@@ -63,7 +70,13 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     const fetchWebhooks = async () => {
       try {
-        const response = await fetch(`${BACKEND_URL}/api/webhooks`);
+        const response = await fetch(`${BACKEND_URL}/api/webhooks`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          // Remove credentials since we're using '*' for CORS
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch webhooks');
         }
@@ -104,7 +117,10 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const response = await fetch(`${BACKEND_URL}/api/webhooks`, {
         method: 'POST',
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Remove credentials since we're using '*' for CORS
       });
       
       if (!response.ok) {
