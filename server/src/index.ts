@@ -27,14 +27,17 @@ const SERVER_PORT = parseInt(process.env.PORT || '5000', 10);
 const allowedOrigins = [
   'http://localhost:3100',
   'http://193.219.97.148:3100',
-  'https://webhook.produkmastah.com',
+  'http://webhook.produkmastah.com', 
+  'https://webhook.produkmastah.com',  
+  'http://localhost:5100',
   'http://193.219.97.148:5100',
   'https://webhook-server.produkmastah.com',
-  'http://webhook.produkmastah.com',
+  'http://webhook-server.produkmastah.com',
+  'http://localhost:5000',   
+  'http://192.168.100.247:3000',
+  'http://192.168.100.247:5000',
   'http://localhost:3000',
-  'http://localhost:5000',
-  'http://localhost:5100',
-  'http://webhook-server.produkmastah.com'
+  'http://localhost:5000'
 ];
 
 const app = express();
