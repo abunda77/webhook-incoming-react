@@ -1,52 +1,127 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+interface WebhookPayload {
+  timestamp: Date;
+  headers: Record<string, string>;
+  body: any;
+  query: Record<string, string>;
+}
 
 interface WebhookData {
   id: string;
   url: string;
-  payloads: any[];
+  payloads: WebhookPayload[];
 }
+
+// Environment variables
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+const SERVER_PORT = parseInt(process.env.PORT || '5000', 10);
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
-    methods: ['GET', 'POST']
-  }
+    origin: CLIENT_URL,
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
-app.use(cors());
+// Configure CORS
+app.use(cors({
+  origin: CLIENT_URL,
+  credentials: true
+}));
 app.use(express.json());
 
-// Store webhooks in memory
+// Store webhooks in memory with a max limit
+const MAX_WEBHOOKS = 1000;
 const webhooks = new Map<string, WebhookData>();
 
-// Generate new webhook URL
-app.post('/api/webhooks', (req, res) => {
-  const id = uuidv4();
-  const url = `/webhook/${id}`;
+// API rate limiting
+const requestCounts = new Map<string, { count: number; timestamp: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const MAX_REQUESTS = 100;
+
+function isRateLimited(clientIp: string | undefined): boolean {
+  if (!clientIp) return true;
   
-  webhooks.set(id, {
-    id,
+  const now = Date.now();
+  const clientRequests = requestCounts.get(clientIp);
+
+  if (!clientRequests) {
+    requestCounts.set(clientIp, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (now - clientRequests.timestamp > RATE_LIMIT_WINDOW) {
+    requestCounts.set(clientIp, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (clientRequests.count >= MAX_REQUESTS) {
+    return true;
+  }
+
+  clientRequests.count++;
+  return false;
+}
+
+// Cleanup old rate limiting data periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of requestCounts.entries()) {
+    if (now - data.timestamp > RATE_LIMIT_WINDOW) {
+      requestCounts.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW);
+
+// Generate new webhook URL
+app.post('/api/webhooks', (req: Request, res: Response) => {
+  const clientIp = req.ip;
+  
+  if (isRateLimited(clientIp)) {
+    res.status(429).json({ error: 'Too many requests' });
+    return;
+  }
+
+  if (webhooks.size >= MAX_WEBHOOKS) {
+    res.status(507).json({ error: 'Maximum webhook limit reached' });
+    return;
+  }
+
+  const newId = uuidv4();
+  const url = `/webhook/${newId}`;
+  
+  const newWebhook: WebhookData = {
+    id: newId,
     url,
     payloads: []
-  });
-
-  res.json({ id, url });
+  };
+  
+  webhooks.set(newId, newWebhook);
+  res.json(newWebhook);
 });
 
 // List all webhooks
-app.get('/api/webhooks', (req, res) => {
+app.get('/api/webhooks', (_req: Request, res: Response) => {
   const webhookList = Array.from(webhooks.values());
   res.json(webhookList);
 });
 
 // Get webhook by ID
-app.get('/api/webhooks/:id', (req, res) => {
+app.get('/api/webhooks/:id', (req: Request, res: Response) => {
   const webhook = webhooks.get(req.params.id);
   if (!webhook) {
     res.status(404).json({ error: 'Webhook not found' });
@@ -56,40 +131,52 @@ app.get('/api/webhooks/:id', (req, res) => {
 });
 
 // Handle incoming webhook requests
-app.post('/webhook/:id', (req, res) => {
-  const { id } = req.params;
-  const webhook = webhooks.get(id);
+app.post('/webhook/:id', (req: Request, res: Response) => {
+  const webhook = webhooks.get(req.params.id);
   
   if (!webhook) {
     res.status(404).json({ error: 'Webhook not found' });
     return;
   }
 
-  const payload = {
+  const payload: WebhookPayload = {
     timestamp: new Date(),
-    headers: req.headers,
+    headers: req.headers as Record<string, string>,
     body: req.body,
-    query: req.query
+    query: req.query as Record<string, string>
   };
 
+  // Limit stored payloads to prevent memory issues
   webhook.payloads.unshift(payload);
+  if (webhook.payloads.length > 100) {
+    webhook.payloads.pop();
+  }
   
   // Emit the new payload to connected clients
-  io.emit(`webhook:${id}`, payload);
-  
+  io.emit(`webhook:${webhook.id}`, payload);
   res.status(200).json({ status: 'success' });
 });
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected');
+  console.log('Client connected:', socket.id);
   
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Client disconnected:', socket.id, 'Reason:', reason);
   });
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Error handling middleware
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server
+server.listen(SERVER_PORT, () => {
+  console.log(`Server running on port ${SERVER_PORT}`);
 });

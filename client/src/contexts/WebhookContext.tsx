@@ -23,27 +23,70 @@ interface WebhookContextType {
 
 const WebhookContext = createContext<WebhookContextType | undefined>(undefined);
 
-const BACKEND_URL = 'http://localhost:5000';
-const socket = io(BACKEND_URL);
+const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 'http://localhost:5000';
 
 export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
+  // Initialize socket connection
   useEffect(() => {
-    // Fetch existing webhooks
-    fetch(`${BACKEND_URL}/api/webhooks`)
-      .then(res => res.json())
-      .then(data => setWebhooks(data))
-      .catch(console.error);
+    const newSocket = io(BACKEND_URL, {
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      withCredentials: true,
+    });
 
-    // Socket.io event handlers
+    newSocket.on('connect', () => {
+      console.log('Socket connected');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
+
+  // Fetch initial webhooks
+  useEffect(() => {
+    const fetchWebhooks = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/webhooks`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch webhooks');
+        }
+        const data = await response.json();
+        setWebhooks(data);
+      } catch (error) {
+        console.error('Error fetching webhooks:', error);
+      }
+    };
+
+    fetchWebhooks();
+  }, []);
+
+  // Set up webhook event listeners
+  useEffect(() => {
+    if (!socket) return;
+
     webhooks.forEach(webhook => {
       socket.on(`webhook:${webhook.id}`, (payload: WebhookPayload) => {
         setWebhooks(prevWebhooks =>
           prevWebhooks.map(w =>
             w.id === webhook.id
-              ? { ...w, payloads: [payload, ...w.payloads] }
+              ? { ...w, payloads: [payload, ...w.payloads].slice(0, 100) }
               : w
           )
         );
@@ -55,15 +98,27 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
         socket.off(`webhook:${webhook.id}`);
       });
     };
-  }, [webhooks]);
+  }, [webhooks, socket]);
 
   const createWebhook = async () => {
-    const response = await fetch(`${BACKEND_URL}/api/webhooks`, {
-      method: 'POST',
-    });
-    const webhook = await response.json();
-    setWebhooks(prev => [...prev, { ...webhook, payloads: [] }]);
-    return webhook;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/webhooks`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create webhook');
+      }
+
+      const webhook = await response.json();
+      const newWebhook = { ...webhook, payloads: [] };
+      setWebhooks(prev => [...prev, newWebhook]);
+      return newWebhook;
+    } catch (error) {
+      console.error('Error creating webhook:', error);
+      throw error;
+    }
   };
 
   return (

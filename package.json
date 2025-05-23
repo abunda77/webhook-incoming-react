@@ -1,0 +1,17 @@
+{
+  "name": "webhook-incoming-react",
+  "version": "1.0.0",
+  "description": "A simple webhook receiver application similar to webhook.site, built with React and Express.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node start.js",
+    "install-all": "concurrently \"cd server && npm install\" \"cd client && npm install\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
