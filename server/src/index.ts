@@ -25,11 +25,26 @@ interface WebhookData {
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 const SERVER_PORT = parseInt(process.env.PORT || '5000', 10);
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5100',
+  'http://193.219.97.148:3100',
+  'http://193.219.97.148:5100',
+  'https://webhook.produkmastah.com',
+  'https://webhook-server.produkmastah.com'
+];
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_URL,
+    origin: function(origin, callback) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true
   },
@@ -39,7 +54,13 @@ const io = new Server(server, {
 
 // Configure CORS
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
