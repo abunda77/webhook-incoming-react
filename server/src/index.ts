@@ -30,6 +30,10 @@ const allowedOrigins = [
   'https://webhook.produkmastah.com',
   'https://webhook-server.produkmastah.com',
   'http://webhook.produkmastah.com',
+  'http://localhost:3100',
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://localhost:5100',
   'http://webhook-server.produkmastah.com'
 ];
 
