@@ -25,12 +25,12 @@ interface WebhookData {
 const SERVER_PORT = parseInt(process.env.PORT || '5000', 10);
 
 const allowedOrigins = [
+  'http://localhost:3100',
   'http://193.219.97.148:3100',
-  'http://193.219.97.148:5100',
   'https://webhook.produkmastah.com',
+  'http://193.219.97.148:5100',
   'https://webhook-server.produkmastah.com',
   'http://webhook.produkmastah.com',
-  'http://localhost:3100',
   'http://localhost:3000',
   'http://localhost:5000',
   'http://localhost:5100',
@@ -42,15 +42,18 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: function(origin, callback) {
-      if (!origin || 
-          allowedOrigins.some(o => 
-            origin.startsWith(o) || 
-            origin.includes(o)
-          )
-      ) {
+      console.log('Socket.IO Incoming Origin:', origin);
+      
+      const isAllowed = !origin || 
+        allowedOrigins.some(o => 
+          origin.startsWith(o)
+        );
+
+      if (isAllowed) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        console.log('Socket.IO Rejected Origin:', origin);
+        callback(new Error('Socket.IO: Not allowed by CORS'));
       }
     },
     methods: ['GET', 'POST'],
@@ -62,12 +65,18 @@ const io = new Server(server, {
 
 // Configure CORS
 app.use(cors({
-  origin: function(origin, callback) {
-    console.log('Incoming origin:', origin);
-    if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+  origin: function(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    console.log('Incoming Origin:', origin);
+    
+    const isAllowed = !origin || 
+      allowedOrigins.some(o => 
+        origin.startsWith(o)
+      );
+
+    if (isAllowed) {
       callback(null, true);
     } else {
-      console.log('Rejected origin:', origin);
+      console.log('Rejected Origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
