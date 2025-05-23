@@ -28,7 +28,9 @@ const allowedOrigins = [
   'http://193.219.97.148:3100',
   'http://193.219.97.148:5100',
   'https://webhook.produkmastah.com',
-  'https://webhook-server.produkmastah.com'
+  'https://webhook-server.produkmastah.com',
+  'http://webhook.produkmastah.com',
+  'http://webhook-server.produkmastah.com'
 ];
 
 const app = express();
@@ -36,7 +38,12 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: function(origin, callback) {
-      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      if (!origin || 
+          allowedOrigins.some(o => 
+            origin.startsWith(o) || 
+            origin.includes(o)
+          )
+      ) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -52,9 +59,11 @@ const io = new Server(server, {
 // Configure CORS
 app.use(cors({
   origin: function(origin, callback) {
+    console.log('Incoming origin:', origin);
     if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
       callback(null, true);
     } else {
+      console.log('Rejected origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
