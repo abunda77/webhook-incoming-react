@@ -26,7 +26,7 @@ const WebhookContext = createContext<WebhookContextType | undefined>(undefined);
 // Mengubah default URL dan menambahkan port yang benar
 const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 
   (window.location.hostname === 'localhost' 
-    ? 'http://localhost:5100'
+    ? 'https://webhook-server.produkmastah.com' // Use HTTPS for localhost:5100'
     : 'http://193.219.97.148:5100');
 
 export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
