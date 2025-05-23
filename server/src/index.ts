@@ -25,19 +25,23 @@ interface WebhookData {
 const SERVER_PORT = parseInt(process.env.PORT || '5000', 10);
 
 const allowedOrigins = [
+  // Development URLs
+  'http://localhost:3000',
   'http://localhost:3100',
-  'http://193.219.97.148:3100',
-  'http://webhook.produkmastah.com', 
-  'https://webhook.produkmastah.com',  
+  'http://localhost:5000',
   'http://localhost:5100',
-  'http://193.219.97.148:5100',
-  'https://webhook-server.produkmastah.com',
-  'http://webhook-server.produkmastah.com',
-  'http://localhost:5000',   
   'http://192.168.100.247:3000',
   'http://192.168.100.247:5000',
-  'http://localhost:3000',
-  'http://localhost:5000'
+  // Production URLs
+  'http://193.219.97.148:3100',
+  'http://193.219.97.148:5100',
+  'http://webhook.produkmastah.com', 
+  'https://webhook.produkmastah.com',
+  'http://webhook-server.produkmastah.com',
+  'https://webhook-server.produkmastah.com',
+  // Additional production URLs if needed
+  'https://webhook-client.produkmastah.com',
+  'http://webhook-client.produkmastah.com'
 ];
 
 const app = express();
@@ -47,10 +51,16 @@ const io = new Server(server, {
     origin: function(origin, callback) {
       console.log('Socket.IO Incoming Origin:', origin);
       
-      const isAllowed = !origin || 
-        allowedOrigins.some(o => 
-          origin.startsWith(o)
-        );
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      
+      // Check if the origin matches any of our allowed origins
+      const isAllowed = allowedOrigins.some(allowedOrigin => 
+        origin.toLowerCase().startsWith(allowedOrigin.toLowerCase())
+      );
 
       if (isAllowed) {
         callback(null, true);
@@ -71,10 +81,16 @@ app.use(cors({
   origin: function(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     console.log('Incoming Origin:', origin);
     
-    const isAllowed = !origin || 
-      allowedOrigins.some(o => 
-        origin.startsWith(o)
-      );
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    // Check if the origin matches any of our allowed origins
+    const isAllowed = allowedOrigins.some(allowedOrigin => 
+      origin.toLowerCase().startsWith(allowedOrigin.toLowerCase())
+    );
 
     if (isAllowed) {
       callback(null, true);
