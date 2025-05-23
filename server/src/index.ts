@@ -70,10 +70,19 @@ const io = new Server(server, {
       }
     },
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
+  allowEIO3: true, // Allow Engine.IO version 3 connections
+  transports: ['websocket', 'polling'], // Enable both WebSocket and polling transport
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  path: '/socket.io/', // Explicitly set Socket.IO path
+  cookie: {
+    name: 'io',
+    httpOnly: true,
+    sameSite: 'lax'
+  }
 });
 
 // Configure CORS
@@ -99,8 +108,15 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Length', 'Content-Type']
 }));
+
+// Enable pre-flight requests for all routes
+app.options('*', cors());
+
 app.use(express.json());
 
 // Store webhooks in memory with a max limit
