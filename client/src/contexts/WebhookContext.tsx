@@ -23,7 +23,8 @@ interface WebhookContextType {
 
 const WebhookContext = createContext<WebhookContextType | undefined>(undefined);
 
-const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 'http://localhost:5000';
+// Mengubah default URL ke port 5100 dan menambahkan production URL
+const BACKEND_URL = process.env.REACT_APP_SERVER_URL || 'http://193.219.97.148:5100';
 
 export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -34,29 +35,27 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     const newSocket = io(BACKEND_URL, {
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      withCredentials: false, // Change to false since we're using '*' for CORS
-      transports: ['websocket', 'polling'], // Explicitly set transports
-      timeout: 60000,
+      withCredentials: false,
+      transports: ['polling'], // Start with polling only
+      timeout: 20000,
+      forceNew: true,
+      path: '/socket.io',
+      autoConnect: true
     });
 
     newSocket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('Socket connected successfully to:', BACKEND_URL);
     });
 
     newSocket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-      // Attempt to reconnect with polling if websocket fails
-      if ((newSocket.io.opts.transports as string[])?.includes('websocket')) {
-        console.log('Falling back to polling transport');
-        newSocket.io.opts.transports = ['polling'];
-      }
+      console.error('Socket connection error:', error.message);
     });
 
     newSocket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
+      console.log('Socket disconnected. Reason:', reason);
     });
 
     setSocket(newSocket);
@@ -68,26 +67,40 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Fetch initial webhooks
   useEffect(() => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     const fetchWebhooks = async () => {
       try {
+        console.log('Fetching webhooks from:', BACKEND_URL);
         const response = await fetch(`${BACKEND_URL}/api/webhooks`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
-          // Remove credentials since we're using '*' for CORS
+          signal: controller.signal
         });
+
         if (!response.ok) {
-          throw new Error('Failed to fetch webhooks');
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
         setWebhooks(data);
+        console.log('Webhooks fetched successfully:', data);
       } catch (error) {
-        console.error('Error fetching webhooks:', error);
+        if (error instanceof Error) {
+          console.error('Error fetching webhooks:', error.message);
+        }
       }
     };
 
     fetchWebhooks();
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   // Set up webhook event listeners
@@ -114,26 +127,36 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [webhooks, socket]);
 
   const createWebhook = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     try {
+      console.log('Creating new webhook at:', BACKEND_URL);
       const response = await fetch(`${BACKEND_URL}/api/webhooks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        // Remove credentials since we're using '*' for CORS
+        signal: controller.signal
       });
       
       if (!response.ok) {
-        throw new Error('Failed to create webhook');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const webhook = await response.json();
       const newWebhook = { ...webhook, payloads: [] };
       setWebhooks(prev => [...prev, newWebhook]);
+      console.log('Webhook created successfully:', newWebhook);
       return newWebhook;
     } catch (error) {
-      console.error('Error creating webhook:', error);
+      if (error instanceof Error) {
+        console.error('Error creating webhook:', error.message);
+      }
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   };
 
