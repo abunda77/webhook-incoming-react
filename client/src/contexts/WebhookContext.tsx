@@ -24,25 +24,34 @@ interface WebhookContextType {
 const WebhookContext = createContext<WebhookContextType | undefined>(undefined);
 
 // Mengubah default URL dan menambahkan port yang benar
-const BACKEND_URL = (() => {
-  // Check if we're in production
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.REACT_APP_SERVER_URL || 'https://webhook-server.produkmastah.com';
-  }
-  
-  // For development, try to use the same hostname as the client
+const getBackendUrl = () => {
+  // Get the current hostname
   const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+
+  // Development environment
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:5100';
-  } else if (hostname === '193.219.97.148') {
-    return 'http://193.219.97.148:5100';
-  } else if (hostname.includes('produkmastah.com')) {
-    return 'https://webhook-server.produkmastah.com';
   }
-  
-  // Default fallback
-  return 'https://webhook-server.produkmastah.com';
-})();
+
+  // When accessed via IP address
+  if (hostname === '193.219.97.148') {
+    return 'http://193.219.97.148:5100';
+  }
+
+  // When accessed via domain
+  if (hostname.includes('webhook.produkmastah.com')) {
+    // Use the same protocol (http/https) as the client
+    return `${protocol}//webhook-server.produkmastah.com`;
+  }
+
+  // Default fallback - use IP address as it's working
+  return 'http://193.219.97.148:5100';
+};
+
+const BACKEND_URL = process.env.REACT_APP_SERVER_URL || getBackendUrl();
+
+console.log('Using backend URL:', BACKEND_URL); // For debugging
 
 export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -55,26 +64,40 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     const newSocket = io(BACKEND_URL, {
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
       withCredentials: false,
-      transports: ['polling', 'websocket'],
-      timeout: 60000,
+      transports: ['polling'], // Start with polling only
+      timeout: 20000,
       forceNew: true,
       path: '/socket.io',
-      // Add additional Socket.IO options for secure connections
+      // Add security options
       secure: BACKEND_URL.startsWith('https'),
-      rejectUnauthorized: false // Helps with self-signed certificates if you're using any
+      rejectUnauthorized: false,
+      // Add custom headers if needed
+      extraHeaders: {
+        'Origin': window.location.origin
+      }
     });
 
+    // Connection event handlers
     newSocket.on('connect', () => {
       console.log('Socket connected successfully to:', BACKEND_URL);
+      // Try websocket after successful polling connection
+      newSocket.io.opts.transports = ['polling', 'websocket'];
     });
 
     newSocket.on('connect_error', (error) => {
       console.error('Socket connection error:', error.message);
-      console.log('Current transport:', newSocket.io.engine.transport.name);
+      const transport = newSocket.io.engine?.transport?.name;
+      console.log('Failed transport:', transport);
+      
+      // If websocket fails, fall back to polling only
+      if (transport === 'websocket') {
+        console.log('Falling back to polling transport');
+        newSocket.io.opts.transports = ['polling'];
+      }
     });
 
     newSocket.on('error', (error) => {
@@ -98,7 +121,7 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Fetch initial webhooks
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), 20000); // Reduced timeout
 
     const fetchWebhooks = async () => {
       try {
@@ -108,12 +131,13 @@ export const WebhookProvider: React.FC<{ children: React.ReactNode }> = ({ child
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'Origin': window.location.origin
           },
           signal: controller.signal,
           mode: 'cors',
           cache: 'no-cache',
-          credentials: 'same-origin',
-          referrerPolicy: 'no-referrer-when-downgrade'
+          credentials: 'omit', // Changed from same-origin
+          referrerPolicy: 'strict-origin-when-cross-origin'
         });
 
         if (!response.ok) {
