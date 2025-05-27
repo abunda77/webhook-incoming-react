@@ -76,3 +76,4 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.windsurf/
